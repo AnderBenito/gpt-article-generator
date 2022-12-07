@@ -4,8 +4,11 @@ import csv
 from dotenv import load_dotenv
 from tqdm import tqdm
 import markdown
+from concurrent import futures
 
-CSV_HEADERS = ["keyword", "category", "metatitle", "metadesc", "raw_content", "html_content"]
+CSV_HEADERS = ["keyword", "category", "metatitle",
+               "metadesc", "raw_content", "html_content"]
+
 
 def main():
     load_dotenv()
@@ -32,8 +35,20 @@ def load_keywords() -> list[tuple[str, str]]:
 
 def start_generation(keywords: list[tuple[str, str]]):
     generated: list[tuple[str, str, str, str, str]] = []
-    for title, category in tqdm(keywords):
-        generated.append(generate_article(title, category))
+    # for title, category in tqdm(keywords):
+    #     generated.append(generate_article(title, category))
+    with futures.ThreadPoolExecutor() as executor:
+        for r in tqdm(executor.map(lambda k: generate_article(k[0], k[1]), keywords)):
+            generated.append(r)
+        # future_to_url = {executor.submit(
+        #     generate_article, keyword[0], keyword[1]): keyword for keyword in keywords}
+        # for future in futures.as_completed(future_to_url):
+        #     keyword = future_to_url[future]
+        #     try:
+        #         r = future.result()
+        #         generated.append(r)
+        #     except Exception as e:
+        #         print(f"{keyword} generated an exception: {e}")
 
     with open("generated.csv", "w", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -54,29 +69,33 @@ def generate_article(title: str, category: str):
         writer = csv.writer(f)
 
         writer.writerow(CSV_HEADERS)
-        writer.writerow([title, category, metatitle, metadesc, markdown_content, html_content])
+        writer.writerow([title, category, metatitle, metadesc,
+                        markdown_content, html_content])
 
+    print(f"{title} article contents generated")
     return (title, category, metatitle, metadesc, markdown_content, html_content)
+
 
 def article_content_to_html(content: str) -> str:
     return markdown.markdown(content)
 
+
 def generate_meta_desc(keyword: str) -> str:
-    initial_prompt = f"""Genera un parrafo de metadescripción SEO para el keyword "{keyword}"."""
+    initial_prompt = f"""Genera un parrafo de metadescripción SEO para el keyword "{keyword}" de 155 caracteres como máximo."""
 
     return generate_completion(initial_prompt)
 
 
 def generate_article_content(keyword: str) -> str:
-    initial_prompt = f"""Escribe un web blog en formato markdown sobre "{keyword}". Con introducción y conclusiones. Escribe encabezados. Con palabras clave en negrita.  Explicalo con un tono cercano y casual. Que se pueda leer en 5 minutos. Añade emojis."""
+    initial_prompt = f"""Escribe un web blog en formato markdown sobre "{keyword}". Con introducción y conclusiones. Escribe encabezados. Pon las palabras en negrita. Explicalo con un tono cercano y casual. Que se pueda leer en 5 minutos. Añade emojis."""
 
     return generate_completion(initial_prompt)
 
 
 def generate_meta_title(keyword: str) -> str:
-    initial_prompt = f"""Genera un meta-título SEO para la keyword "{keyword}."""
+    initial_prompt = f"""Genera un meta-título SEO para la keyword "{keyword}" de 57 caracteres como máximo sin separadores."""
 
-    return generate_completion(initial_prompt)
+    return generate_completion(initial_prompt, max_tokens=50)
 
 
 def generate_completion(prompt: str, max_tokens=1024, temperature=0.2):
@@ -100,7 +119,7 @@ def generate_completion(prompt: str, max_tokens=1024, temperature=0.2):
             if "<end>" in generated_text or generated_text == "":
                 return generated_text.replace("<end>", "").strip()
         except Exception as e:
-            print("Error ocurred: ", e)
+            print("Error ocurred in completion: ", e)
             continue
 
 
