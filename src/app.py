@@ -9,6 +9,9 @@ from concurrent import futures
 CSV_HEADERS = ["keyword", "category", "metatitle",
                "metadesc", "raw_content", "html_content"]
 
+GENERATED_DIR_PATH = "generated"
+GENERATED_FILE_NAME = "generated.csv"
+ARTIFACTS_DIR_PATH = "generated/keywords"
 
 def main():
     load_dotenv()
@@ -35,11 +38,11 @@ def load_keywords() -> list[tuple[str, str]]:
 
 def start_generation(keywords: list[tuple[str, str]]):
     generated: list[tuple[str, str, str, str, str]] = []
-    # for title, category in tqdm(keywords):
-    #     generated.append(generate_article(title, category))
-    with futures.ThreadPoolExecutor() as executor:
-        for r in tqdm(executor.map(lambda k: generate_article(k[0], k[1]), keywords)):
-            generated.append(r)
+    for title, category in tqdm(keywords):
+        generated.append(generate_article(title, category))
+    # with futures.ThreadPoolExecutor() as executor:
+    #     for r in tqdm(executor.map(lambda k: generate_article(k[0], k[1]), keywords)):
+    #         generated.append(r)
         # future_to_url = {executor.submit(
         #     generate_article, keyword[0], keyword[1]): keyword for keyword in keywords}
         # for future in futures.as_completed(future_to_url):
@@ -50,7 +53,9 @@ def start_generation(keywords: list[tuple[str, str]]):
         #     except Exception as e:
         #         print(f"{keyword} generated an exception: {e}")
 
-    with open("generated.csv", "w", encoding="utf-8") as f:
+    if not os.path.exists(GENERATED_DIR_PATH):
+        os.makedirs(GENERATED_DIR_PATH)
+    with open(f"{GENERATED_DIR_PATH}/{GENERATED_FILE_NAME}", "w", encoding="utf-8") as f:
         writer = csv.writer(f)
 
         writer.writerow(CSV_HEADERS)
@@ -65,7 +70,10 @@ def generate_article(title: str, category: str):
     html_content = article_content_to_html(markdown_content)
 
     file_title = "".join([e for e in title.replace(" ", "_") if e.isalnum()])
-    with open(f"{file_title}_generated.csv", "w", encoding="utf-8") as f:
+
+    if not os.path.exists(ARTIFACTS_DIR_PATH):
+        os.makedirs(ARTIFACTS_DIR_PATH)
+    with open(f"{ARTIFACTS_DIR_PATH}/{file_title}_generated.csv", "w", encoding="utf-8") as f:
         writer = csv.writer(f)
 
         writer.writerow(CSV_HEADERS)
@@ -81,21 +89,21 @@ def article_content_to_html(content: str) -> str:
 
 
 def generate_meta_desc(keyword: str) -> str:
-    initial_prompt = f"""Genera un parrafo de metadescripción SEO para el keyword "{keyword}" de 155 caracteres como máximo."""
+    initial_prompt = f"""Genera un parrafo de metadescripción SEO de menos de 155 caracteres sobre "{keyword}"."""
 
-    return generate_completion(initial_prompt)
+    return generate_completion(initial_prompt, max_tokens=170)
 
 
 def generate_article_content(keyword: str) -> str:
-    initial_prompt = f"""Escribe un web blog en formato markdown sobre "{keyword}". Con introducción y conclusiones. Escribe encabezados. Pon las palabras en negrita. Explicalo con un tono cercano y casual. Que se pueda leer en 5 minutos. Añade emojis."""
+    initial_prompt = f"""Escribe un web blog en formato markdown sobre "{keyword}" con introducción, encabezados y conclusiones, explicado con un tono cercano y casual. Añade emojis y palabras destacadas en negrita."""
 
     return generate_completion(initial_prompt)
 
 
 def generate_meta_title(keyword: str) -> str:
-    initial_prompt = f"""Genera un meta-título SEO para la keyword "{keyword}" de 57 caracteres como máximo sin separadores."""
+    initial_prompt = f"""Genera un meta-título SEO para la keyword "{keyword}" con menos de 57 caracteres y sin separadores."""
 
-    return generate_completion(initial_prompt, max_tokens=50)
+    return generate_completion(initial_prompt, max_tokens=45)
 
 
 def generate_completion(prompt: str, max_tokens=1024, temperature=0.2):
