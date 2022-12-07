@@ -3,8 +3,9 @@ import openai
 import csv
 from dotenv import load_dotenv
 from tqdm import tqdm
-import re
+import markdown
 
+CSV_HEADERS = ["keyword", "category", "metatitle", "metadesc", "raw_content", "html_content"]
 
 def main():
     load_dotenv()
@@ -34,11 +35,10 @@ def start_generation(keywords: list[tuple[str, str]]):
     for title, category in tqdm(keywords):
         generated.append(generate_article(title, category))
 
-    header = ["keyword", "category", "metatitle", "metadesc", "content"]
     with open("generated.csv", "w", encoding="utf-8") as f:
         writer = csv.writer(f)
 
-        writer.writerow(header)
+        writer.writerow(CSV_HEADERS)
         for row in generated:
             writer.writerow(row)
 
@@ -46,19 +46,20 @@ def start_generation(keywords: list[tuple[str, str]]):
 def generate_article(title: str, category: str):
     metatitle = generate_meta_title(title)
     metadesc = generate_meta_desc(title)
-    content = generate_article_content(title)
-
-    header = ["keyword", "category", "metatitle", "metadesc", "content"]
+    markdown_content = generate_article_content(title)
+    html_content = article_content_to_html(markdown_content)
 
     file_title = "".join([e for e in title.replace(" ", "_") if e.isalnum()])
     with open(f"{file_title}_generated.csv", "w", encoding="utf-8") as f:
         writer = csv.writer(f)
 
-        writer.writerow(header)
-        writer.writerow([title, category, metatitle, metadesc, content])
+        writer.writerow(CSV_HEADERS)
+        writer.writerow([title, category, metatitle, metadesc, markdown_content, html_content])
 
-    return (title, category, metatitle, metadesc, content)
+    return (title, category, metatitle, metadesc, markdown_content, html_content)
 
+def article_content_to_html(content: str) -> str:
+    return markdown.markdown(content)
 
 def generate_meta_desc(keyword: str) -> str:
     initial_prompt = f"""Genera un parrafo de metadescripción SEO para el keyword "{keyword}"."""
@@ -98,7 +99,8 @@ def generate_completion(prompt: str, max_tokens=1024, temperature=0.2):
 
             if "<end>" in generated_text or generated_text == "":
                 return generated_text.replace("<end>", "").strip()
-        except:
+        except Exception as e:
+            print("Error ocurred: ", e)
             continue
 
 
