@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 import markdown
 from concurrent import futures
+import asyncio
+
 
 CSV_HEADERS = ["keyword", "category", "metatitle",
                "metadesc", "raw_content", "html_content"]
@@ -13,7 +15,10 @@ GENERATED_DIR_PATH = "generated"
 GENERATED_FILE_NAME = "generated.csv"
 ARTIFACTS_DIR_PATH = "generated/keywords"
 
-def main():
+sem = asyncio.Semaphore(10)
+
+
+async def main():
     load_dotenv()
 
     openai.organization = "org-eEal6XpWLgcgq2NOL2k6t7tn"
@@ -21,7 +26,7 @@ def main():
 
     keywords = load_keywords()
 
-    start_generation(keywords)
+    await start_generation(keywords)
 
 
 def load_keywords() -> list[tuple[str, str]]:
@@ -36,22 +41,12 @@ def load_keywords() -> list[tuple[str, str]]:
     return keywords
 
 
-def start_generation(keywords: list[tuple[str, str]]):
+async def start_generation(keywords: list[tuple[str, str]]):
     generated: list[tuple[str, str, str, str, str]] = []
-    for title, category in tqdm(keywords):
-        generated.append(generate_article(title, category))
-    # with futures.ThreadPoolExecutor() as executor:
-    #     for r in tqdm(executor.map(lambda k: generate_article(k[0], k[1]), keywords)):
-    #         generated.append(r)
-        # future_to_url = {executor.submit(
-        #     generate_article, keyword[0], keyword[1]): keyword for keyword in keywords}
-        # for future in futures.as_completed(future_to_url):
-        #     keyword = future_to_url[future]
-        #     try:
-        #         r = future.result()
-        #         generated.append(r)
-        #     except Exception as e:
-        #         print(f"{keyword} generated an exception: {e}")
+
+    generated = await asyncio.gather(
+        *[safe_generate_article_async(title, category) for title, category in keywords]
+    )
 
     if not os.path.exists(GENERATED_DIR_PATH):
         os.makedirs(GENERATED_DIR_PATH)
@@ -63,10 +58,20 @@ def start_generation(keywords: list[tuple[str, str]]):
             writer.writerow(row)
 
 
-def generate_article(title: str, category: str):
-    metatitle = generate_meta_title(title)
-    metadesc = generate_meta_desc(title)
-    markdown_content = generate_article_content(title)
+async def safe_generate_article_async(title: str, category: str):
+    async with sem:
+        return await generate_article(title, category)
+
+
+async def generate_article(title: str, category: str):
+
+
+    metatitle, metadesc, markdown_content = await asyncio.gather(
+        generate_meta_title(title),
+        generate_meta_desc(title),
+        generate_article_content(title),
+    )
+
     html_content = article_content_to_html(markdown_content)
 
     file_title = "".join([e for e in title.replace(" ", "_") if e.isalnum()])
@@ -88,38 +93,40 @@ def article_content_to_html(content: str) -> str:
     return markdown.markdown(content)
 
 
-def generate_meta_desc(keyword: str) -> str:
+async def generate_meta_desc(keyword: str) -> str:
     initial_prompt = f"""Genera un parrafo de metadescripción SEO de menos de 155 caracteres sobre "{keyword}"."""
 
-    return generate_completion(initial_prompt, max_tokens=170)
+    return await generate_completion(initial_prompt, max_tokens=170)
 
 
-def generate_article_content(keyword: str) -> str:
-    initial_prompt = f"""Escribe un web blog en formato markdown sobre "{keyword}" con introducción, encabezados y conclusiones, explicado con un tono cercano y casual. Añade emojis y palabras destacadas en negrita."""
+async def generate_article_content(keyword: str) -> str:
+    initial_prompt = f"""Escribe artículo estilo medium en formato markdown sobre {keyword}. Con introducción, y encabezados. Explicalo de forma detallada pero con un tono cercano. Añade emojis y palabras en negrita."""
 
-    return generate_completion(initial_prompt)
+    return await generate_completion(initial_prompt, temperature=0.5, presence_penalty=0.5)
 
 
-def generate_meta_title(keyword: str) -> str:
+async def generate_meta_title(keyword: str) -> str:
     initial_prompt = f"""Genera un meta-título SEO para la keyword "{keyword}" con menos de 57 caracteres y sin separadores."""
 
-    return generate_completion(initial_prompt, max_tokens=45)
+    return await generate_completion(initial_prompt, max_tokens=45)
 
 
-def generate_completion(prompt: str, max_tokens=1024, temperature=0.2):
+async def generate_completion(prompt: str, max_tokens=1024, temperature=0.2, presence_penalty=0):
     _prompt = f"""{prompt}. Finaliza con la cadena <end>
-    
+
     texto:
     """
 
     for _ in range(5):
         try:
-            answer = openai.Completion.create(
+            loop = asyncio.get_event_loop()
+            answer = await loop.run_in_executor(None, lambda: openai.Completion.create(
                 model="text-davinci-003",
                 prompt=_prompt,
                 max_tokens=max_tokens,
                 temperature=temperature,
-            )
+                presence_penalty=presence_penalty,
+            ))
 
             generated_text: str = answer["choices"][0]["text"]
             prompt = prompt + generated_text
@@ -131,4 +138,4 @@ def generate_completion(prompt: str, max_tokens=1024, temperature=0.2):
             continue
 
 
-main()
+asyncio.run(main())
