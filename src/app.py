@@ -20,11 +20,13 @@ class GeneratedCompletionData:
     keyword: str
     category: str
     title: str
-    content: str
+    raw_content: str
+    cleaned_content: str
     html_content: str
     meta_title: str
     meta_desc: str
     img_url: str
+    img_attribution_username: str
 
 @dataclass
 class CompletionsConfig:
@@ -37,14 +39,16 @@ class CompletionsConfig:
 
 
 CSV_HEADERS = [
-    "keyword", 
-    "title", 
-    "category", 
+    "keyword",
+    "title",
+    "category",
     "metatitle",
-    "metadesc", 
-    "raw_content", 
-    "html_content", 
+    "metadesc",
+    "raw_content",
+    "cleaned_content",
+    "html_content",
     "img_url",
+    "img_attribution_username"
     ]
 
 GENERATED_DIR_PATH = "generated"
@@ -58,8 +62,9 @@ async def main():
 
     completions_config = CompletionsConfig(
         generate_images=True,
-        title_pipe=lambda input: f"""Titulo - {input.keyword}""",
-        content_prompt_pipe=lambda input: f"""Escribe artículo estilo medium en formato markdown sobre {input.keyword}. Con introducción, y encabezados. Explicalo de forma detallada pero con un tono cercano. Añade emojis y palabras en negrita.""",
+        title_pipe=lambda input: f"""{input.keyword}""",
+        content_prompt_pipe=lambda input: f"""Somos una página web que escribe artículos sobre inclusión educativa. Escribimos los artículos con un tono cercano y profesional. Hacemos artículos con buen SEO y de calidad.
+Escribe artículo estilo medium en formato html sobre {input.keyword}. Con introducción, y encabezados. Con palabras en <strong>.""",
         meta_desc_prompt_pipe=lambda input: f"""Genera un parrafo de metadescripción SEO de menos de 155 caracteres sobre "{input.keyword}".""",
         meta_title_prompt_pipe=lambda input: f"""Genera un meta-título SEO para la keyword "{input.keyword}" con menos de 57 caracteres y sin separadores."""
     )
@@ -68,8 +73,9 @@ async def main():
     openai.api_key = os.getenv("OPENAI_API_KEY")
 
     keywords = load_keywords()
+    category_dict = load_category_dict()
 
-    await start_generation(keywords, completions_config)
+    await start_generation(keywords, category_dict, completions_config)
 
 
 def load_keywords() -> list[CompletionInput]:
@@ -83,12 +89,22 @@ def load_keywords() -> list[CompletionInput]:
 
     return keywords
 
+def load_category_dict() -> dict[str, str]:
+    category_dict = dict[str, str]()
+    with open("categories.csv", "r", encoding="utf-8") as f:
+        reader = csv.reader(f)
 
-async def start_generation(inputs: list[CompletionInput], config: CompletionsConfig):
+        _ = next(reader)
+        for row in reader:
+            category_dict[row[0]] = row[1]
+
+    return category_dict
+
+async def start_generation(inputs: list[CompletionInput], category_dict: dict[str, str], config: CompletionsConfig):
     generated: list[GeneratedCompletionData] = []
 
     generated = await asyncio.gather(
-        *[safe_generate_article_async(input, config) for input in inputs]
+        *[safe_generate_article_async(input, category_dict, config) for input in inputs]
     )
 
     if not os.path.exists(GENERATED_DIR_PATH):
@@ -99,33 +115,40 @@ async def start_generation(inputs: list[CompletionInput], config: CompletionsCon
         writer.writerow(CSV_HEADERS)
         for row in generated:
             writer.writerow([
-            row.keyword, 
-            row.title, 
-            row.category, 
+            row.keyword,
+            row.title,
+            row.category,
             row.meta_title,
-            row.meta_desc, 
-            row.content, 
+            row.meta_desc,
+            row.raw_content,
+            row.cleaned_content, 
             row.html_content, 
             row.img_url,
+            row.img_attribution_username
             ])
 
 
-async def safe_generate_article_async(input: CompletionInput, config: CompletionsConfig):
+async def safe_generate_article_async(input: CompletionInput, category_dict: dict[str, str], config: CompletionsConfig):
     async with sem:
-        return await generate_article(input, config)
+        return await generate_article(input, category_dict, config)
 
 
-async def generate_article(input: CompletionInput, config: CompletionsConfig):
+async def generate_article(input: CompletionInput, category_dict: dict[str, str], config: CompletionsConfig):
     title = config.title_pipe(input)
 
-    metatitle, metadesc, raw_content, img_url = await asyncio.gather(
+    metatitle, metadesc, raw_content, img_data = await asyncio.gather(
         generate_meta_title(input, config),
         generate_meta_desc(input, config),
         generate_article_content(input, config),
-        get_img_url(input, config),
+        get_img_url(input, category_dict, config),
     )
 
-    html_content = article_content_to_html(raw_content)
+    replaced = raw_content.replace("\r\n", "\n").replace("\r", "")
+
+    # Remove first line to remote title from content
+    cleaned_content = "\n".join(replaced.split("\n")[1:])
+
+    html_content = article_content_to_html(cleaned_content)
 
     file_title = "".join([e for e in title.replace(" ", "_") if e.isalnum()])
 
@@ -135,19 +158,31 @@ async def generate_article(input: CompletionInput, config: CompletionsConfig):
         writer = csv.writer(f)
 
         writer.writerow(CSV_HEADERS)
-        writer.writerow([title, title, input.category, metatitle, metadesc,
-                        html_content, html_content, img_url])
+        writer.writerow([
+            title,
+            title,
+            input.category,
+            metatitle,
+            metadesc,
+            raw_content,
+            cleaned_content,
+            html_content,
+            img_data[0],
+            img_data[1]
+        ])
 
     print(f"{title} article contents generated")
     return GeneratedCompletionData(
         keyword=input.keyword,
         category=input.category,
-        content=raw_content,
+        raw_content=raw_content,
+        cleaned_content=cleaned_content,
         html_content=html_content,
         meta_desc=metadesc,
         meta_title=metatitle,
         title=title,
-        img_url=img_url
+        img_url=img_data[0],
+        img_attribution_username=img_data[1]
     )
 
 
@@ -164,7 +199,9 @@ async def generate_meta_desc(input: CompletionInput, config: CompletionsConfig) 
 async def generate_article_content(input: CompletionInput, config: CompletionsConfig) -> str:
     initial_prompt = config.content_prompt_pipe(input)
 
-    return await generate_completion(initial_prompt, max_tokens=3711, temperature=0.5, presence_penalty=0.5)
+    completion = await generate_completion(initial_prompt, max_tokens=3711, temperature=0.5, presence_penalty=0.5)
+
+    return completion
 
 
 async def generate_meta_title(input: CompletionInput, config: CompletionsConfig) -> str:
@@ -174,7 +211,6 @@ async def generate_meta_title(input: CompletionInput, config: CompletionsConfig)
 
 
 async def generate_completion(prompt: str, max_tokens=1024, temperature=0.2, presence_penalty=0):
-    return ""
     _prompt = f"""{prompt}. Finaliza con la cadena <end>
 
     texto:
@@ -200,14 +236,18 @@ async def generate_completion(prompt: str, max_tokens=1024, temperature=0.2, pre
             print("Error ocurred in completion: ", e)
             continue
 
-async def get_img_url(input: CompletionInput, config: CompletionsConfig):
-    url = "https://bing-image-search1.p.rapidapi.com/images/search"
+async def get_img_url(
+    input: CompletionInput,
+    category_dict: dict[str, str],
+    config: CompletionsConfig
+    ) -> tuple[str, str]:
+    url = "https://api.unsplash.com/photos/random"
 
-    querystring = {"q":f"{input.keyword}","count":"1","mkt":"es-ES"}
+    img_query = category_dict[input.category]
+    querystring = {"query":f"{img_query}","count":"1"}
 
     headers = {
-        "X-RapidAPI-Key": "e9b91ef8b6msha9f0861e95a5b3dp11fcfajsn191712ccf51f",
-        "X-RapidAPI-Host": "bing-image-search1.p.rapidapi.com"
+        "Authorization": "Client-ID O-SVzn6X_ue1XqzoSCZdMdGiUd-XZ21bw8B_xWyU9Ic"
     }
 
     loop = asyncio.get_event_loop() 
@@ -217,13 +257,14 @@ async def get_img_url(input: CompletionInput, config: CompletionsConfig):
     )
 
     if response.status_code != 200:
-        return ""
+        return ["", ""]
 
-    values = response.json()["value"]
+    values = response.json()
 
     if values is None or len(values) == 0:
-        return ""
+        return ["", ""]
     
-    return values[0]["contentUrl"]
+
+    return [values[0]["urls"]["full"], values[0]["user"]["username"]]
 
 asyncio.run(main())
