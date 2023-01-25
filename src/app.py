@@ -63,8 +63,8 @@ async def main():
     completions_config = CompletionsConfig(
         generate_images=True,
         title_pipe=lambda input: f"""{input.keyword}""",
-        content_prompt_pipe=lambda input: f"""Somos una página web que escribe artículos sobre inclusión educativa. Escribimos los artículos con un tono cercano y profesional. Hacemos artículos con buen SEO y de calidad.
-Escribe artículo estilo medium en formato html sobre {input.keyword}. Con introducción, y encabezados. Con palabras en <strong>.""",
+        content_prompt_pipe=lambda input: f"""Somos una página web que escribe artículos sobre inclusión educativa. Escribimos los artículos con un tono cercano y profesional.
+Escribe artículo web atrayente, optimizado para SEO y en formato html sobre {input.keyword}. Con introducción, y encabezados. Con palabras en <strong>.""",
         meta_desc_prompt_pipe=lambda input: f"""Genera un parrafo de metadescripción SEO de menos de 155 caracteres sobre "{input.keyword}".""",
         meta_title_prompt_pipe=lambda input: f"""Genera un meta-título SEO para la keyword "{input.keyword}" con menos de 57 caracteres y sin separadores."""
     )
@@ -193,7 +193,7 @@ def article_content_to_html(content: str) -> str:
 async def generate_meta_desc(input: CompletionInput, config: CompletionsConfig) -> str:
     initial_prompt = config.meta_desc_prompt_pipe(input)
 
-    return await generate_completion(initial_prompt, max_tokens=130)
+    return await generate_completion(initial_prompt, max_tokens=100)
 
 
 async def generate_article_content(input: CompletionInput, config: CompletionsConfig) -> str:
@@ -243,7 +243,7 @@ async def get_img_url(
     ) -> tuple[str, str]:
     url = "https://api.unsplash.com/photos/random"
 
-    img_query = category_dict[input.category]
+    img_query = category_dict[input.category] if input.category in category_dict else "studying"
     querystring = {"query":f"{img_query}","count":"1"}
 
     headers = {
@@ -265,6 +265,6 @@ async def get_img_url(
         return ["", ""]
     
 
-    return [values[0]["urls"]["full"], values[0]["user"]["username"]]
+    return [values[0]["urls"]["regular"], values[0]["user"]["username"]]
 
 asyncio.run(main())
