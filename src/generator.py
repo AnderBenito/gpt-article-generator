@@ -69,9 +69,9 @@ class ArticleGenerator:
         new_errors: list[completion_data.CompletionError] = []
 
         meta_title_prompt = self.completion_config.meta_title_prompt_pipe(
-            input)
-        meta_desc_prompt = self.completion_config.meta_desc_prompt_pipe(input)
-        content_prompt = self.completion_config.content_prompt_pipe(input)
+            article.completion_input)
+        meta_desc_prompt = self.completion_config.meta_desc_prompt_pipe(article.completion_input)
+        content_prompt = self.completion_config.content_prompt_pipe(article.completion_input)
 
         for error in article.errors:
             if error.error_type == completion_data.CompletionErrorType.CONTENT:
@@ -104,7 +104,7 @@ class ArticleGenerator:
                         article.meta_title = meta_title
 
             if error.error_type == completion_data.CompletionErrorType.IMG:
-                img = await get_img_url(self.service_config.unsplash_config, article.completion_input, self.category_dict, self.completion_config)
+                img = await get_img_url(self.service_config.unsplash_config, article.completion_input, self.category_dict)
 
                 match img:
                     case completion_data.CompletionError():
