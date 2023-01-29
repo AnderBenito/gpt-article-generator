@@ -61,9 +61,14 @@ class ArticleGenerator:
       return article
     
     new_errors: list[completion_data.CompletionError] = []
+
+    meta_title_prompt = self.completion_config.meta_title_prompt_pipe(input)
+    meta_desc_prompt = self.completion_config.meta_desc_prompt_pipe(input)
+    content_prompt = self.completion_config.content_prompt_pipe(input)
+    
     for error in article.errors:
       if error.error_type == completion_data.CompletionErrorType.CONTENT:
-        raw_content = await generate_article_content(self.openai_service, article.completion_input, self.completion_config)
+        raw_content = await generate_article_content(self.openai_service, content_prompt)
 
         match raw_content:
           case completion_data.CompletionError():
@@ -73,7 +78,7 @@ class ArticleGenerator:
             article.cleaned_content = get_cleaned_content(raw_content)
 
       if error.error_type == completion_data.CompletionErrorType.META_DESC:
-        meta_desc = await generate_meta_desc(self.openai_service, article.completion_input, self.completion_config)
+        meta_desc = await generate_meta_desc(self.openai_service, meta_desc_prompt)
 
         match meta_desc:
           case completion_data.CompletionError():
@@ -82,7 +87,7 @@ class ArticleGenerator:
             article.meta_desc = meta_desc
 
       if error.error_type == completion_data.CompletionErrorType.META_TITLE:
-        meta_title = await generate_meta_title(self.openai_service, article.completion_input, self.completion_config)
+        meta_title = await generate_meta_title(self.openai_service, meta_title_prompt)
 
         match meta_title:
           case completion_data.CompletionError():
@@ -118,12 +123,15 @@ class ArticleGenerator:
       return
 
     title = self.completion_config.title_pipe(input)
+    meta_title_prompt = self.completion_config.meta_title_prompt_pipe(input)
+    meta_desc_prompt = self.completion_config.meta_desc_prompt_pipe(input)
+    content_prompt = self.completion_config.content_prompt_pipe(input)
 
     metatitle, metadesc, raw_content, img_data = await asyncio.gather(
-        generate_meta_title(self.openai_service, input, self.completion_config),
-        generate_meta_desc(self.openai_service, input, self.completion_config),
-        generate_article_content(self.openai_service, input, self.completion_config),
-        get_img_url(input, self.category_dict, self.completion_config),
+        generate_meta_title(self.openai_service, meta_title_prompt),
+        generate_meta_desc(self.openai_service, meta_desc_prompt),
+        generate_article_content(self.openai_service, content_prompt),
+        get_img_url(input, self.category_dict),
     )
 
     errors = collect_errors([metatitle, metadesc, raw_content, img_data])
@@ -139,7 +147,12 @@ class ArticleGenerator:
         title=title,
         img_url=img_data[0] if error_or_none(img_data) is not None else None,
         img_attribution_username=img_data[1] if error_or_none(img_data) is not None else None,
-        errors=errors if len(errors) > 0 else None
+        errors=errors if len(errors) > 0 else None,
+        used_prompts=completion_data.CompletionPrompts(
+          content=content_prompt,
+          meta_desc=meta_desc_prompt,
+          meta_title=meta_title_prompt
+        )
       )
     )
   
@@ -177,38 +190,31 @@ def get_cleaned_content(raw_content: str) -> str:
 def article_content_to_html(content: str) -> str:
     return markdown.markdown(content)
 
-async def generate_meta_desc(openai_service: ia_generator.OpenAICompletionService, input: completion_data.CompletionInput, config: CompletionsConfig) -> str | completion_data.CompletionError:
+async def generate_meta_desc(openai_service: ia_generator.OpenAICompletionService, prompt: str) -> str | completion_data.CompletionError:
   try:  
-    initial_prompt = config.meta_desc_prompt_pipe(input)
-
-    return await openai_service.generate_completion(initial_prompt, max_tokens=100)
+    return await openai_service.generate_completion(prompt, max_tokens=100)
   except Exception as e:
     return completion_data.CompletionError(completion_data.CompletionErrorType.META_DESC, str(e))
 
 
-async def generate_article_content(openai_service: ia_generator.OpenAICompletionService, input: completion_data.CompletionInput, config: CompletionsConfig) -> str | completion_data.CompletionError:
+async def generate_article_content(openai_service: ia_generator.OpenAICompletionService, prompt: str) -> str | completion_data.CompletionError:
   try:
-    initial_prompt = config.content_prompt_pipe(input)
-
-    completion = await openai_service.generate_completion(initial_prompt, max_tokens=3711, temperature=0.5, presence_penalty=0.5)
+    completion = await openai_service.generate_completion(prompt, max_tokens=3711, temperature=0.5, presence_penalty=0.5)
 
     return completion
   except Exception as e:
     return completion_data.CompletionError(completion_data.CompletionErrorType.CONTENT, str(e))
 
 
-async def generate_meta_title(openai_service: ia_generator.OpenAICompletionService, input: completion_data.CompletionInput, config: CompletionsConfig) -> str | completion_data.CompletionError:
+async def generate_meta_title(openai_service: ia_generator.OpenAICompletionService, prompt: str) -> str | completion_data.CompletionError:
   try:
-    initial_prompt = config.meta_title_prompt_pipe(input)
-
-    return await openai_service.generate_completion(initial_prompt, max_tokens=45)
+    return await openai_service.generate_completion(prompt, max_tokens=45)
   except Exception as e:
     return completion_data.CompletionError(completion_data.CompletionErrorType.META_TITLE, str(e))
 
 async def get_img_url(
     input: completion_data.CompletionInput,
-    category_dict: dict[str, str],
-    config: CompletionsConfig
+    category_dict: dict[str, str]
     ) -> tuple[str, str] | completion_data.CompletionError:
     try:
       url = "https://api.unsplash.com/photos/random"

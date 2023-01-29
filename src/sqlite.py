@@ -17,5 +17,6 @@ def run_migrations(con: sqlite3.Connection):
           meta_desc VARCHAR,
           img_url VARCHAR,
           img_attribution_username VARCHAR,
-          errors JSON
+          errors JSON,
+          prompts JSON NOT NULL
           )""")

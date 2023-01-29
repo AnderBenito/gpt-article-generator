@@ -30,7 +30,7 @@ def load_completions_config():
         generate_images=True,
         title_pipe=lambda input: f"""{input.keyword}""",
         content_prompt_pipe=lambda input: f"""Somos una página web que escribe artículos sobre inclusión educativa. Escribimos los artículos con un tono cercano y profesional.
-Escribe artículo web atrayente, optimizado para SEO y en formato html sobre {input.keyword}. Con introducción, y encabezados. Con palabras en <strong>.""",
+Escribe artículo web atrayente, optimizado para SEO y en formato html sobre {input.keyword}. Con introducción, y encabezados. Pon las frases importantes en negrita.""",
         meta_desc_prompt_pipe=lambda input: f"""Genera un parrafo de metadescripción SEO de menos de 155 caracteres sobre "{input.keyword}".""",
         meta_title_prompt_pipe=lambda input: f"""Genera un meta-título SEO para la keyword "{input.keyword}" con menos de 57 caracteres y sin separadores."""
     )

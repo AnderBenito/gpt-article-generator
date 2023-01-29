@@ -20,6 +20,12 @@ class CompletionInput:
     category: str
 
 @dataclass
+class CompletionPrompts:
+    content: str
+    meta_desc: str
+    meta_title: str
+
+@dataclass
 class CompletionError:
   error_type: CompletionErrorType
   reason: str
@@ -43,6 +49,7 @@ class CompletionData:
     img_url: str
     img_attribution_username: str
     errors: list[CompletionError]
+    used_prompts: CompletionPrompts
 
 class CompletionDataDB:
   connection: sqlite3.Connection
@@ -55,7 +62,7 @@ class CompletionDataDB:
     with self.connection as cursor:
       cursor.execute("""
         INSERT INTO article_completions VALUES
-        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       """, persistence)
 
   def update_completion_data(self, data: CompletionData):
@@ -63,9 +70,9 @@ class CompletionDataDB:
     with self.connection as cursor:
       cursor.execute(f"""
         UPDATE article_completions
-        SET title = $1, raw_content = $2, cleaned_content = $3, meta_title = $4, meta_desc = $5, img_url = $6, img_attribution_username = $7, errors = $8
+        SET title = $1, raw_content = $2, cleaned_content = $3, meta_title = $4, meta_desc = $5, img_url = $6, img_attribution_username = $7, errors = $8, prompts = $9
         WHERE keyword = '{data.completion_input.keyword}'
-      """, (data.title, data.raw_content, data.cleaned_content, data.meta_title, data.meta_desc, data.img_url, data.img_attribution_username, persistence[10]))
+      """, (data.title, data.raw_content, data.cleaned_content, data.meta_title, data.meta_desc, data.img_url, data.img_attribution_username, persistence[10], persistence[11]))
 
   def get_by_keyword(self, keyword: str) -> Optional[CompletionData]:
     cursor = self.connection.cursor()
@@ -97,6 +104,18 @@ class CompletionDataDB:
     finally:
       cursor.close()
 
+  def get_succeded(self) -> list[CompletionData]:
+    cursor = self.connection.cursor()
+    try:
+      cursor.execute("""
+        SELECT * FROM article_completions a WHERE a.errors IS NULL
+      """)
+      articles = cursor.fetchall()
+
+      return list(map(lambda x: map_to_domain(x), articles))
+    finally:
+      cursor.close()
+
 def map_error_type(error_type: str) -> CompletionErrorType:
   match error_type:
     case "CONTENT":
@@ -117,6 +136,13 @@ def map_to_domain(article) -> CompletionData:
 
   errors = list(map(lambda x: CompletionError(map_error_type(x["error_type"]), x["reason"]), error_j["errors"])) if error_j is not None else None
 
+  prompts_json = json.loads(article[11])["prompts"]
+  prompts = CompletionPrompts(
+    content=prompts_json["content"],
+    meta_desc=prompts_json["meta_desc"],
+    meta_title=prompts_json["meta_title"],
+  )
+
   return CompletionData(
     CompletionInput(article[0], article[1]),
     article[2],
@@ -127,7 +153,8 @@ def map_to_domain(article) -> CompletionData:
     article[7],
     article[8],
     article[9],
-    errors
+    errors,
+    prompts
   )
 
 def map_to_persistence(article: CompletionData):
@@ -135,6 +162,8 @@ def map_to_persistence(article: CompletionData):
       "error_type": x.error_type.toString(),
       "reason": x.reason
     }, article.errors))}) if article.errors is not None else None
+
+  prompts_json_o = json.dumps({"prompts": article.used_prompts.__dict__})
 
   return (
     article.completion_input.keyword,
@@ -147,5 +176,6 @@ def map_to_persistence(article: CompletionData):
     article.meta_desc,
     article.img_url,
     article.img_attribution_username,
-    json_o
+    json_o,
+    prompts_json_o
   )

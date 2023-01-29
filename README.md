@@ -5,7 +5,7 @@
 ### Article
 
 Somos una página web que escribe artículos sobre inclusión educativa. Escribimos los artículos con un tono cercano y profesional.
-Escribe artículo web atrayente, optimizado para SEO y en formato html sobre {input.keyword}. Con introducción, y encabezados. Con palabras en <strong>.
+Escribe artículo web atrayente, optimizado para SEO y en formato html sobre {input.keyword}. Con introducción, y encabezados. Pon las frases importantes en negrita.
 
 ### meta-desc
 
