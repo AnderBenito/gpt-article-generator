@@ -1,15 +1,14 @@
 import openai
 import asyncio
+import config
 
 class OpenAICompletionService:
-  api_key: str
-  organization: str
+  openai_config: config.OpenAIConfig
 
-  def __init__(self, organization: str, api_key: str) -> None:
-    self.organization = organization
-    self.api_key = api_key
-    openai.organization = organization
-    openai.api_key = api_key
+  def __init__(self, openai_config: config.OpenAIConfig) -> None:
+    self.openai_config = openai_config
+    openai.organization = openai_config.organization
+    openai.api_key = openai_config.api_key
     
   async def generate_completion(self, prompt: str, max_tokens=1024, temperature=0.2, presence_penalty=0):
     _prompt = f"""{prompt}. Finaliza con la cadena <end>

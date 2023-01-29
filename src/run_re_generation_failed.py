@@ -1,17 +1,13 @@
-import os
 import ia_generator
-from dotenv import load_dotenv
 import asyncio
 import completion_data
 import generator
 import sqlite
 import loaders
+import config
 
 async def main():
-    load_dotenv()
-
-    organization = "org-eEal6XpWLgcgq2NOL2k6t7tn"
-    api_key = os.getenv("OPENAI_API_KEY")
+    my_config = config.load_config()
 
     category_dict = loaders.load_category_dict()
     completions_config = loaders.load_completions_config()
@@ -20,12 +16,13 @@ async def main():
     sqlite.run_migrations(connection)
     
     completion_db = completion_data.CompletionDataDB(connection)
-    openai_service = ia_generator.OpenAICompletionService(organization, api_key)
+    openai_service = ia_generator.OpenAICompletionService(my_config.openai_config)
     article_generator = generator.ArticleGenerator(
         openai_service,
         completion_db,
         category_dict,
-        completions_config
+        completions_config,
+        my_config
     )
 
     await article_generator.regenerate_articles()

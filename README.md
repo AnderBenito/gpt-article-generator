@@ -1,5 +1,13 @@
 # Python IA Article Generator Script
 
+## Env variables
+
+```
+OPENAI_API_KEY=
+OPENAI_ORG=
+UNSPLASH_API_KEY=
+```
+
 ## Recommended propts
 
 ### Article

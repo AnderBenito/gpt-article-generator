@@ -8,6 +8,7 @@ import markdown
 from concurrent import futures
 import asyncio
 import completion_data
+import config
 from collections.abc import Coroutine
 
 @dataclass
@@ -25,12 +26,14 @@ class ArticleGenerator:
   completion_db: completion_data.CompletionDataDB
   category_dict: dict[str, str]
   completion_config: CompletionsConfig
+  service_config: config.ServiceConfig
 
-  def __init__(self, openai_service: ia_generator.OpenAICompletionService, completion_db: completion_data.CompletionDataDB, category_dict: dict[str, str], completion_config: CompletionsConfig) -> None:
+  def __init__(self, openai_service: ia_generator.OpenAICompletionService, completion_db: completion_data.CompletionDataDB, category_dict: dict[str, str], completion_config: CompletionsConfig, service_config: config.ServiceConfig) -> None:
     self.openai_service = openai_service
     self.category_dict = category_dict
     self.completion_config = completion_config
     self.completion_db = completion_db
+    self.service_config = service_config
 
   async def start_generation(self, inputs: list[completion_data.CompletionInput]):
     await asyncio.gather(
@@ -96,7 +99,7 @@ class ArticleGenerator:
             article.meta_title = meta_title
     
       if error.error_type == completion_data.CompletionErrorType.IMG:
-        img = await get_img_url(article.completion_input, self.category_dict, self.completion_config)
+        img = await get_img_url(self.service_config.unsplash_config, article.completion_input, self.category_dict, self.completion_config)
 
         match img:
           case completion_data.CompletionError():
@@ -131,7 +134,7 @@ class ArticleGenerator:
         generate_meta_title(self.openai_service, meta_title_prompt),
         generate_meta_desc(self.openai_service, meta_desc_prompt),
         generate_article_content(self.openai_service, content_prompt),
-        get_img_url(input, self.category_dict),
+        get_img_url(self.service_config.unsplash_config, input, self.category_dict),
     )
 
     errors = collect_errors([metatitle, metadesc, raw_content, img_data])
@@ -213,6 +216,7 @@ async def generate_meta_title(openai_service: ia_generator.OpenAICompletionServi
     return completion_data.CompletionError(completion_data.CompletionErrorType.META_TITLE, str(e))
 
 async def get_img_url(
+    unsplash_config: config.UnsplashConfig,
     input: completion_data.CompletionInput,
     category_dict: dict[str, str]
     ) -> tuple[str, str] | completion_data.CompletionError:
@@ -223,7 +227,7 @@ async def get_img_url(
       querystring = {"query":f"{img_query}","count":"1"}
 
       headers = {
-          "Authorization": "Client-ID O-SVzn6X_ue1XqzoSCZdMdGiUd-XZ21bw8B_xWyU9Ic"
+          "Authorization": f"Client-ID {unsplash_config.api_key}"
       }
 
       loop = asyncio.get_event_loop() 
