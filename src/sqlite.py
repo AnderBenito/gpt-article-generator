@@ -1,12 +1,14 @@
 import sqlite3
 
+
 def get_sqlite_connection():
-  return sqlite3.connect("article_completions.db")
+    return sqlite3.connect("article_completions.db")
+
 
 def run_migrations(con: sqlite3.Connection):
-  # Run migration
-  with con as cursor:
-      cursor.execute("""CREATE TABLE IF NOT EXISTS article_completions(
+    # Run migration
+    with con as cursor:
+        cursor.execute("""CREATE TABLE IF NOT EXISTS article_completions(
           keyword VARCHAR NOT NULL PRIMARY KEY,
           category VARCHAR NOT NULL,
           title VARCHAR,

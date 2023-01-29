@@ -6,6 +6,7 @@ import sqlite
 import loaders
 import config
 
+
 async def main():
     my_config = config.load_config()
 
@@ -14,9 +15,10 @@ async def main():
 
     connection = sqlite.get_sqlite_connection()
     sqlite.run_migrations(connection)
-    
+
     completion_db = completion_data.CompletionDataDB(connection)
-    openai_service = ia_generator.OpenAICompletionService(my_config.openai_config)
+    openai_service = ia_generator.OpenAICompletionService(
+        my_config.openai_config)
     article_generator = generator.ArticleGenerator(
         openai_service,
         completion_db,

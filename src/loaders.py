@@ -3,6 +3,7 @@ import csv
 import completion_data
 import generator
 
+
 def load_keywords() -> list[completion_data.CompletionInput]:
     keywords: list[tuple[str, str]] = []
     with open("keywords.csv", "r", encoding="utf-8") as f:
@@ -13,6 +14,7 @@ def load_keywords() -> list[completion_data.CompletionInput]:
             keywords.append(completion_data.CompletionInput(row[0], row[1]))
 
     return keywords
+
 
 def load_category_dict() -> dict[str, str]:
     category_dict = dict[str, str]()
@@ -25,8 +27,9 @@ def load_category_dict() -> dict[str, str]:
 
     return category_dict
 
+
 def load_completions_config():
-  return generator.CompletionsConfig(
+    return generator.CompletionsConfig(
         generate_images=True,
         title_pipe=lambda input: f"""{input.keyword}""",
         content_prompt_pipe=lambda input: f"""Somos una página web que escribe artículos sobre inclusión educativa. Escribimos los artículos con un tono cercano y profesional.
