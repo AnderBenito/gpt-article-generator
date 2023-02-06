@@ -121,7 +121,7 @@ class ArticleGenerator:
                     f"[FAILED] Article re-generated with errors for keyword {article.completion_input.keyword}")
             else:
                 print(
-                    f"Article completion re-generated sucessfuly for keyword {article.completion_input.keyword}")
+                    f"[OK] Article completion re-generated sucessfuly for keyword {article.completion_input.keyword}")
 
             return article
 
@@ -129,7 +129,7 @@ class ArticleGenerator:
         existing_completion = self.completion_db.get_by_keyword(input.keyword)
         if existing_completion is not None:
             print(
-                f"Article with keyword {existing_completion.completion_input.keyword} already exists, skipping\n")
+                f"[SKIP] Article with keyword {existing_completion.completion_input.keyword} already exists, skipping\n")
             return
 
         title = self.completion_config.title_pipe(input)
@@ -179,7 +179,7 @@ class ArticleGenerator:
                 f"[FAILED] Article generated with errors for keyword {input.keyword}")
         else:
             print(
-                f"Article completion generated sucessfuly for keyword {input.keyword}")
+                f"[OK] Article completion generated sucessfuly for keyword {input.keyword}")
 
 
 T = TypeVar("T")
@@ -226,7 +226,7 @@ async def generate_meta_desc(openai_service: ia_generator.OpenAICompletionServic
 
 async def generate_article_content(openai_service: ia_generator.OpenAICompletionService, prompt: str) -> str | completion_data.CompletionError:
     try:
-        completion = await openai_service.generate_completion(prompt, max_tokens=3711, temperature=0.5, presence_penalty=0.5)
+        completion = await openai_service.generate_completion(prompt, max_tokens=3711, temperature=0.5, presence_penalty=0.8)
 
         return completion
     except Exception as e:
