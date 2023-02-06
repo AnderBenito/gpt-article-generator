@@ -12,7 +12,7 @@ class OpenAICompletionService:
         openai.api_key = openai_config.api_key
 
     async def generate_completion(self, prompt: str, max_tokens=1024, temperature=0.2, presence_penalty=0):
-        _prompt = f"""{prompt}. Finaliza con la cadena <end>
+        _prompt = f"""{prompt}. End string with <end>.
 
     texto:
     """
