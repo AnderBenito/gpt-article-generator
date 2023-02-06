@@ -2,7 +2,7 @@ import sqlite3
 
 
 def get_sqlite_connection():
-    return sqlite3.connect("article_completions.db")
+    return sqlite3.connect("db/article_completions.db")
 
 
 def run_migrations(con: sqlite3.Connection):
